@@ -44,7 +44,7 @@ training_spoof = cat(1, spoof_cqcc_train, spoof_cqcc_dev);
 
 % обучение GMM для GENUINE 
 disp('Training GMM for GENUINE...');
-[genuineGMM.m, genuineGMM.s, genuineGMM.w] = vl_gmm([training_genuine{:}], 512, 'verbose', 'MaxNumIterations',100);
+[genuineGMM.m, genuineGMM.s, genuineGMM.w] = vl_gmm([training_genuine{:}], 512, 'verbose', 'MaxNumIterations', 100);
 try
     save(fullfile('./training_models/',feature, 'genuineGMM.mat'), 'genuineGMM')
 catch
