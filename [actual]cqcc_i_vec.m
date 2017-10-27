@@ -1,10 +1,12 @@
 clear; close all; clc;
+
 %% добавляем директории с тулкитами
 addpath(genpath('utility'));
 addpath(genpath('CQCC_v1.0'));
 addpath(genpath('bosaris_toolkit'));
 addpath('MSR Identity Toolkit v1.0/code');
 addpath('voicebox');
+
 %% PATH's для файлов с метками
 df = '.\extracted_features\cqcc_i_vec\'
 dir_data = 'D:\Data';
@@ -200,32 +202,6 @@ ubm_labels = cat(1, train_labels_genuine, train_labels_spoof);
 
  
 %%
-% ubm_labels_num = zeros(size(ubm_labels));
-% for i = 1:size(ubm_labels)
-%     if strcmp(ubm_labels{i,1}, 'genuine')
-%         ubm_labels_num(i) = 0;
-%     else
-%         ubm_labels_num(i) = 1;
-%     end
-% end
-% 
-% %% делаем LDA
-% niter = 10;
-% lda_dim = 90;
-% nphi    = lda_dim;
-% 
-% [ubm_v_lda, ubm_eig_lda] = lda(ubm_data, ubm_labels)
-% final_train_IV = ubm_v_lda' * ubm_data;
-
-%% усредняем i-вектора
-
-% averageIVs_train_genuine = mean(training_genuine_i_vectors, 2);           % Average IVs across channels.
-% modelIVs_train_genuine = ubm_v_lda' * averageIVs_train_genuine;
-% 
-% averageIVs_train_spoof = mean(training_spoof_i_vectors, 2);           % Average IVs across channels.
-% modelIVs_train_spoof = ubm_v_lda' * averageIVs_train_spoof;
-
-%%
 niter = 10;
 nphi = 90;
 
@@ -253,17 +229,13 @@ scores_spoof=scores_spoof.scores_spoof;
 
 new_scores_genuine = mean(scores_genuine,1)
 new_scores_spoof = mean(scores_spoof,1)
-%%
-
 scores = new_scores_genuine - new_scores_spoof;
 
 %%
-save(strcat(df, 'scores_genuine.mat'), 'scores_genuine')
-save(strcat(df, 'scores_spoof.mat'), 'scores_spoof')
+save(strcat(df, 'scores_genuine_cqcc_i_vector_100_gplda_90.mat'), 'scores_genuine');
+save(strcat(df, 'scores_spoof_cqcc_i_vector_100_gplda_90.mat'), 'scores_spoof');
 
-
-%%
-% чтение меток evaluation 
+%% чтение меток evaluation 
 fileID = fopen(evaProtocolFile);
 protocol = textscan(fileID, '%s%s');
 filenames = protocol{1};
@@ -275,10 +247,6 @@ fclose(fileID);
 EER = rocch2eer(Pmiss,Pfa) * 100; 
 fprintf('EER is %.2f\n', EER);
 
-%%
-
-save(strcat(df, 'scores_genuine_cqcc_i_vector_100_gplda_90.mat'), 'scores_genuine');
-save(strcat(df, 'scores_spoof_cqcc_i_vector_100_gplda_90.mat'), 'scores_spoof');
 
 %% plots
 plot(Pfa,Pmiss,'r-^',pf,pm,'g');
@@ -287,4 +255,19 @@ axis('square');grid;legend('ROCCH','ROC');
 xlabel('false alarm probability (%)') % x-axis label
 ylabel('miss probability (%)') % y-axis label
 plot_det_curve(scores(strcmp(labels,'genuine')),scores(strcmp(labels,'spoof')), model)
-%%
+
+
+%% Вычисление EER при помощи Bosaris
+prior = 0.5
+[actdcf,mindcf,prbep,eer] = fastEval(scores(strcmp(labels,'genuine')),scores(strcmp(labels,'spoof')), prior)
+
+%% Построение DET-кривых при помощи Bosaris
+plot_title = 'DET plot for i-vector CQCC model';
+plot_type = Det_Plot.make_plot_window_from_string('old');
+plot_obj = Det_Plot(plot_type,plot_title);
+plot_obj.set_system(scores(strcmp(labels,'genuine')), scores(strcmp(labels,'spoof')),'i-vector CQCC');
+plot_obj.plot_steppy_det({'k','LineWidth',2},' ');
+plot_obj.plot_DR30_fa('k--','30 false alarms');
+plot_obj.plot_DR30_miss('k--','30 misses');
+plot_obj.plot_mindcf_point(prior,{'k*','MarkerSize',8},'mindcf');
+

@@ -30,6 +30,13 @@ training_genuine = cat(1, genuineMFCCTrain, genuineMFCCDev);
 training_spoof = cat(1, spoofMFCCTrain, spoofMFCCDev);
 all_data = cat(1, training_genuine, training_spoof);
 
+%%
+
+clear genuineMFCCTrain
+clear genuineMFCCDev
+clear spoofMFCCTrain
+clear spoofMFCCDev
+
 %%  UBM-моделЬ 
 
 nmix = 512; % number of Gaussian components
@@ -117,77 +124,28 @@ save(fullfile(directory_features, 'evaluation_i_vectors.mat'),'evaluation_i_vect
 
 load(fullfile(directory_features, 'evaluation_i_vectors.mat'));
 
-%% Чтение меток Training и Developmenp
 
-fileID_train = fopen(trainProtocolFile);
-protocol_train = textscan(fileID_train, '%s%s%s%s%s%s%s');
-filenames_train = protocol_train{1};
-labels_train = protocol_train{2};
-fclose(fileID_train);
-
-genuineIdx_train = find(strcmp(labels_train,'genuine'));
-spoofIdx_train = find(strcmp(labels_train,'spoof'));
-
-fileID_dev = fopen(devProtocolFile);
-protocol_dev = textscan(fileID_dev, '%s%s%s%s%s%s%s');
-filenames_dev = protocol_dev{1};
-labels_dev = protocol_dev{2};
-fclose(fileID_dev);
-
-genuineIdx_dev = find(strcmp(labels_dev,'genuine'));
-spoofIdx_dev = find(strcmp(labels_dev,'spoof'));
-
-train_labels_genuine = cat(1, labels_train(1:length(genuineIdx_train)),  labels_dev(1:length(genuineIdx_dev)));
-train_labels_spoof = cat(1,labels_train(length(genuineIdx_train)+1:length(labels_train)),labels_dev(length(genuineIdx_dev)+1:length(labels_dev)));
-
-%% Обучаем GPLDA модель
-ubm_data = cat(2, training_genuine_i_vectors,training_spoof_i_vectors);
-ubm_labels = cat(1, train_labels_genuine, train_labels_spoof);
-
-niter = 10;
-nphi = 90;
-
-plda_ubm = gplda_em(ubm_data, ubm_labels, nphi, niter);
-
-save(fullfile(directory_features, 'plda_ubm.mat'),'plda_ubm');
-
-%% Загружаем GPLDA модель
-
-load(fullfile(directory_features, 'plda_ubm.mat'));
-
-%% Оцениваем Scores
-
-scores_genuine = score_gplda_trials(plda_ubm, training_genuine_i_vectors, evaluation_i_vectors);
-scores_spoof = score_gplda_trials(plda_ubm, training_spoof_i_vectors, evaluation_i_vectors);
-
-new_scores_genuine = mean(scores_genuine,1);
-new_scores_spoof = mean(scores_spoof,1);
-
-scores = new_scores_genuine - new_scores_spoof;
-
-save(fullfile(directory_features, 'scores_genuine_mfcc_i_vector_100_gplda_90.mat'), 'scores_genuine');
-save(fullfile(directory_features, 'scores_spoof_mfcc_i_vector_100_gplda_90.mat'), 'scores_spoof');
-save(fullfile(directory_features, 'scores_mfcc_i_vector_100_gplda_90.mat'), 'scores');
-
-%% Читаем метки Evaluation 
-
+%% Читаем Evaluation метки
 fileID = fopen(evaProtocolFile);
 protocol = textscan(fileID, '%s%s');
 filenames = protocol{1};
 labels = protocol{2};
 fclose(fileID);
 
-%% Вычисляем EER
+%% Обучем SVM с Gaussian ядром
 
-[Pmiss,Pfa] = rocch(scores(strcmp(labels,'genuine')),scores(strcmp(labels,'spoof')));
-[pm,pf] = compute_roc(scores(strcmp(labels,'genuine')),scores(strcmp(labels,'spoof')));
+training_i_vec = [training_genuine_i_vectors'; training_spoof_i_vectors'];
+training_labels = [ones(1, size(training_genuine_i_vectors, 2)), -ones(1, size(training_spoof_i_vectors, 2))];
+
+%%  Обучем SVM с Gaussian ядром
+
+svmModel = fitcsvm(training_i_vec, training_labels, 'KernelFunction','linear');
+[~, scoresSVM] = predict(svmModel, evaluation_i_vectors_ubm');
+
+%%
+scoresSVM = -log(scoresSVM(:,1));
+
+[Pmiss,Pfa] = rocch(scoresSVM(strcmp(labels,'genuine')),scoresSVM(strcmp(labels,'spoof')));
+[pm,pf] = compute_roc(scoresSVM(strcmp(labels,'genuine')),scoresSVM(strcmp(labels,'spoof')));
 EER = rocch2eer(Pmiss,Pfa) * 100; 
 fprintf('EER is %.2f\n', EER);
-
-%% Строим кривые
-plot(Pfa,Pmiss,'r-^',pf,pm,'g');
-title (strcat('ROCCH and ROC plot for  ', model, ' model'));
-axis('square');grid;legend('ROCCH','ROC');
-xlabel('false alarm probability (%)') % x-axis label
-ylabel('miss probability (%)') % y-axis label
-plot_det_curve(scores(strcmp(labels,'genuine')),scores(strcmp(labels,'spoof')), model)

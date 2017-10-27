@@ -19,6 +19,7 @@ evaProtocolFile = fullfile(dir_data,'ASVspoof2017_eval', 'protocol', 'KEY_ASVspo
 feature = 'cqcc_features/';
 % чтение файлов с фичами
 directory_features = fullfile('./extracted_features/' ,feature);
+%%
 
 genuine_cqcc_train = load(strcat(directory_features, 'genuineFeatureCellTrain.mat'));
 genuine_cqcc_dev = load(strcat(directory_features, 'genuineFeatureCellDev.mat'));
@@ -95,6 +96,7 @@ end
 %%
 scores = load(fullfile('./scores/',feature, 'scores.mat'));
 scores = scores.scores;
+
 %% compute performance
 [Pmiss,Pfa] = rocch(scores(strcmp(labels,'genuine')),scores(strcmp(labels,'spoof')));
 [pm,pf] = compute_roc(scores(strcmp(labels,'genuine')),scores(strcmp(labels,'spoof')));
